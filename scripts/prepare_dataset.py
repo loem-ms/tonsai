@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-from __future__ import annotations
-
 import argparse
 from datetime import datetime
 from pathlib import Path
