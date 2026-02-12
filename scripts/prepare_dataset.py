@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,11 @@ from datasets import Dataset, DatasetDict, concatenate_datasets, interleave_data
 
 
 SourceConfig = dict[str, Any]
+
+
+def _log(message: str) -> None:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{now}] [prepare_dataset] {message}", flush=True)
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,6 +35,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def _load_dataset_source(source: SourceConfig) -> Dataset:
+    source_name = source.get("name") or source.get("dataset") or source.get("local_text")
+    source_lang = source.get("language", "unknown")
+    _log(f"Loading source: {source_lang}:{source_name}")
+
     if "local_text" in source:
         loaded = load_dataset("text", data_files={"train": source["local_text"]})["train"]
     else:
@@ -43,10 +53,14 @@ def _load_dataset_source(source: SourceConfig) -> Dataset:
     text_column = source.get("text_column", "text")
     if text_column != "text":
         loaded = loaded.rename_column(text_column, "text")
-    return loaded.select_columns(["text"])
+
+    loaded = loaded.select_columns(["text"])
+    _log(f"Loaded rows for {source_lang}:{source_name}: {len(loaded)}")
+    return loaded
 
 
 def _load_yaml_sources(config_path: Path) -> tuple[list[Dataset], list[float], list[str]]:
+    _log(f"Reading source config: {config_path}")
     config = yaml.safe_load(config_path.read_text())
     sources: list[SourceConfig] = config.get("sources", [])
     if not sources:
@@ -70,36 +84,31 @@ def _load_yaml_sources(config_path: Path) -> tuple[list[Dataset], list[float], l
     return datasets_list, weights, names
 
 
-def _load_any(spec: str) -> Dataset:
+def _load_any(spec: str, language: str) -> Dataset:
+    _log(f"Loading CLI source: {language}:{spec}")
     if Path(spec).exists():
-        return load_dataset("text", data_files={"train": spec})["train"]
-    return load_dataset(spec, split="train")
+        ds = load_dataset("text", data_files={"train": spec})["train"]
+    else:
+        ds = load_dataset(spec, split="train")
+    _log(f"Loaded rows for {language}:{spec}: {len(ds)}")
+    return ds
 
 
 def main() -> None:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
+    _log(f"Output directory: {args.output_dir}")
+    _log(f"Seed: {args.seed}")
+
     if args.config:
         datasets_list, weights, names = _load_yaml_sources(args.config)
-        mixed = interleave_datasets(
-            datasets_list,
-            probabilities=weights,
-            seed=args.seed,
-            stopping_strategy="all_exhausted",
-        )
-        metadata = {
-            "seed": args.seed,
-            "sources": names,
-            "weights": weights,
-            "config_path": str(args.config),
-        }
     else:
         kh_specs = args.khmer or []
         en_specs = args.english or []
 
-        kh = concatenate_datasets([_load_any(spec) for spec in kh_specs]) if kh_specs else None
-        en = concatenate_datasets([_load_any(spec) for spec in en_specs]) if en_specs else None
+        kh = concatenate_datasets([_load_any(spec, "khmer") for spec in kh_specs]) if kh_specs else None
+        en = concatenate_datasets([_load_any(spec, "english") for spec in en_specs]) if en_specs else None
 
         datasets_list = [d for d in [kh, en] if d is not None]
         if not datasets_list:
@@ -107,21 +116,26 @@ def main() -> None:
         weights = [args.khmer_weight] * (1 if kh is not None else 0) + [args.english_weight] * (1 if en is not None else 0)
         names = ["khmer:cli"] * (1 if kh is not None else 0) + ["english:cli"] * (1 if en is not None else 0)
 
-        mixed = interleave_datasets(
-            datasets_list,
-            probabilities=weights,
-            seed=args.seed,
-            stopping_strategy="all_exhausted",
-        )
-        metadata = {
-            "seed": args.seed,
-            "sources": names,
-            "weights": weights,
-            "config_path": None,
-        }
+    _log(f"Interleaving {len(datasets_list)} dataset(s) with weights={weights}")
+    mixed = interleave_datasets(
+        datasets_list,
+        probabilities=weights,
+        seed=args.seed,
+        stopping_strategy="all_exhausted",
+    )
 
+    metadata = {
+        "seed": args.seed,
+        "sources": names,
+        "weights": weights,
+        "config_path": str(args.config) if args.config else None,
+        "num_rows_train": len(mixed),
+    }
+
+    _log("Saving dataset to disk...")
     DatasetDict({"train": mixed}).save_to_disk(str(args.output_dir))
     (args.output_dir / "mixture_metadata.yaml").write_text(yaml.safe_dump(metadata, sort_keys=False))
+    _log(f"Done. Saved train rows: {len(mixed)}")
 
 
 if __name__ == "__main__":

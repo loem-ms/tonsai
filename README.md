@@ -64,6 +64,9 @@ To support that, `scripts/prepare_dataset.py` now accepts a **YAML source config
 
 ### 4.2 Build mixed dataset from YAML (recommended)
 
+The dataset preparation script now prints progress logs (source-by-source load + row counts + save progress) so long runs are easier to monitor.
+
+
 Use the included extensible template:
 
 ```bash
@@ -143,6 +146,9 @@ uv run python scripts/train_gpt2.py \
   --model-config configs/model/gpt2_500m.json \
   --deepspeed configs/deepspeed/zero2_h100.json \
   --warmup-steps 200 \
+  --save-strategy steps \
+  --save-steps 1000 \
+  --save-total-limit 5 \
   --output-dir artifacts/checkpoints
 ```
 
@@ -157,9 +163,16 @@ uv run python scripts/train_gpt2.py \
   --resume-from "existing_model_or_checkpoint" \
   --deepspeed configs/deepspeed/zero2_h100.json \
   --warmup-steps 200 \
+  --save-strategy steps \
+  --save-steps 1000 \
+  --save-total-limit 5 \
   --output-dir artifacts/checkpoints_cpt
 ```
 
+
+
+Checkpoint defaults are now tuned for long runs (`--save-steps 1000`, keep last 5).
+You can switch to `--save-strategy epoch` for smaller experiments.
 
 ### Common DeepSpeed mismatch fix
 

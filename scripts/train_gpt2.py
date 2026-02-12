@@ -29,7 +29,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-steps", type=int, default=200)
     parser.add_argument("--num-train-epochs", type=float, default=1.0)
     parser.add_argument("--logging-steps", type=int, default=10)
-    parser.add_argument("--save-steps", type=int, default=500)
+    parser.add_argument("--save-strategy", type=str, choices=["steps", "epoch"], default="steps")
+    parser.add_argument("--save-steps", type=int, default=1000)
+    parser.add_argument("--save-total-limit", type=int, default=5)
     return parser.parse_args()
 
 
@@ -84,8 +86,9 @@ def main() -> None:
         warmup_steps=args.warmup_steps,
         num_train_epochs=args.num_train_epochs,
         logging_steps=args.logging_steps,
+        save_strategy=args.save_strategy,
         save_steps=args.save_steps,
-        save_total_limit=3,
+        save_total_limit=args.save_total_limit,
         bf16=True,
         deepspeed=str(args.deepspeed),
         report_to=["wandb"],
