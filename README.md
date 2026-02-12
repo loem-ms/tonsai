@@ -66,6 +66,19 @@ uv run python scripts/prepare_dataset.py \
 
 ### 4.2 Train tokenizer
 
+Use the mixed dataset directly (recommended, no extra `khmer.txt` / `english.txt` files needed):
+
+```bash
+uv run python scripts/train_tokenizer.py \
+  --dataset-dir data/mixture \
+  --dataset-split train \
+  --text-column text \
+  --vocab-size 50000 \
+  --output-dir artifacts/tokenizer
+```
+
+If you already have raw text files, you can still train with:
+
 ```bash
 uv run python scripts/train_tokenizer.py \
   --input data/khmer.txt data/english.txt \
