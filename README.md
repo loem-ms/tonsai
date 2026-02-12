@@ -1,1 +1,251 @@
 # tonsai
+
+Khmer-English LLM training starter kit using **uv + Hugging Face + DeepSpeed**.
+
+This repository is designed for your use case:
+- GPT-2 style model around **0.5B parameters**.
+- Mix Khmer and English corpora with controllable sampling.
+- Run on H100 (including Colab environments where available).
+- Support both:
+  1) training from scratch, and
+  2) continual pretraining from an existing checkpoint.
+
+## 1) Recommended strategy
+
+### Stage A: Data pipeline first (fast iteration)
+1. Start with available dumps (Khmer + English) and normalize text.
+2. Train tokenizer on mixed corpus (Khmer-heavy at first, e.g. 60/40).
+3. Build a small pilot dataset and run 0.5-2B token pilot training.
+4. Evaluate Khmer perplexity + benchmark prompts before scaling.
+
+### Stage B: Main pretraining
+- Target ~100B+ tokens if possible for stable 0.5B model behavior.
+- Keep Khmer over-sampled relative to natural web frequency.
+- Suggested data ratios for first production run:
+  - **Khmer 40-60%**
+  - **English 40-60%**
+
+### Stage C: SFT / instruction tuning
+After base model pretraining, run supervised fine-tuning on Khmer/English instruction data for better chat behavior.
+
+## 2) Architecture recommendation (GPT-2 ~0.5B)
+
+`configs/model/gpt2_500m.json` defines a GPT-2-like decoder model:
+- 24 layers
+- hidden size 1536
+- 24 heads
+- context length 2048
+- vocab size 50k
+
+This is in the ~0.5B parameter class and works as a practical first target.
+
+## 3) Environment setup with uv
+
+```bash
+uv sync
+```
+
+For Colab terminal/Jupyter usage:
+1. Clone this repo.
+2. Install uv.
+3. Run `uv sync`.
+4. Launch training with `uv run ...` commands below.
+
+## 4) Data preparation
+
+### 4.1 Why multi-source corpus design (llm-jp style)
+
+Yes — your idea is correct. A multi-source design (Wikipedia + C4/mC4 + curated HQ corpora) is usually better than a single dataset because you get:
+- stronger coverage,
+- better factual diversity,
+- easier future extension.
+
+To support that, `scripts/prepare_dataset.py` now accepts a **YAML source config** with per-source weights and text column mapping.
+
+### 4.2 Build mixed dataset from YAML (recommended)
+
+The dataset preparation script now prints progress logs (source-by-source load + row counts + save progress) so long runs are easier to monitor.
+
+
+Use the included extensible template:
+
+```bash
+uv run python scripts/prepare_dataset.py \
+  --config configs/data/train_sources.example.yaml \
+  --output-dir data/mixture_train
+```
+
+Template includes examples for:
+- Khmer HQ seed: `kimleang123/khmer-text-dataset`
+- Khmer web-scale: `allenai/c4` (`km` subset)
+- Khmer Wikipedia-style source placeholder
+- English HQ seed: `agentlans/high-quality-english-sentences`
+- English web-scale: `allenai/c4` (`en` subset)
+
+> Note: some dataset IDs/subsets may change or require replacement with current HF entries. The interface is designed so you only edit YAML.
+
+### 4.3 Build tokenizer-only dataset (smaller, cleaner)
+
+For tokenizer training, use less noisy but high-quality text first:
+
+```bash
+uv run python scripts/prepare_dataset.py \
+  --config configs/data/tokenizer_sources.example.yaml \
+  --output-dir data/mixture_tokenizer
+```
+
+### 4.4 Legacy CLI mode (still supported)
+
+You can still pass Khmer/English sources directly:
+
+```bash
+uv run python scripts/prepare_dataset.py \
+  --khmer "path_or_hf_dataset_for_khmer" \
+  --english "path_or_hf_dataset_for_english" \
+  --khmer-weight 0.6 \
+  --english-weight 0.4 \
+  --output-dir data/mixture
+```
+
+## 5) Train tokenizer
+
+Use prepared dataset directly (recommended):
+
+```bash
+uv run python scripts/train_tokenizer.py \
+  --dataset-dir data/mixture_tokenizer \
+  --dataset-split train \
+  --text-column text \
+  --max-examples 1000000 \
+  --vocab-size 50000 \
+  --output-dir artifacts/tokenizer
+```
+
+`--max-examples` is optional, but useful to speed up tokenizer iteration on very large corpora.
+
+Or from raw text files:
+
+```bash
+uv run python scripts/train_tokenizer.py \
+  --input data/khmer.txt data/english.txt \
+  --vocab-size 50000 \
+  --output-dir artifacts/tokenizer
+```
+
+## 6) Pretraining / continual pretraining
+
+`train_gpt2.py` now tokenizes **on-the-fly in the data collator** (instead of a full upfront `dataset.map(...)`), so startup is much faster on large corpora.
+
+### From scratch
+```bash
+uv run python scripts/train_gpt2.py \
+  --dataset-dir data/mixture_train \
+  --dataset-split train \
+  --text-column text \
+  --tokenizer-dir artifacts/tokenizer \
+  --model-config configs/model/gpt2_500m.json \
+  --deepspeed configs/deepspeed/zero2_h100.json \
+  --warmup-steps 200 \
+  --save-strategy steps \
+  --save-steps 1000 \
+  --save-total-limit 5 \
+  --output-dir artifacts/checkpoints
+```
+
+### Continual pretraining from existing model
+```bash
+uv run python scripts/train_gpt2.py \
+  --dataset-dir data/mixture_train \
+  --dataset-split train \
+  --text-column text \
+  --tokenizer-dir artifacts/tokenizer \
+  --model-config configs/model/gpt2_500m.json \
+  --resume-from "existing_model_or_checkpoint" \
+  --deepspeed configs/deepspeed/zero2_h100.json \
+  --warmup-steps 200 \
+  --save-strategy steps \
+  --save-steps 1000 \
+  --save-total-limit 5 \
+  --output-dir artifacts/checkpoints_cpt
+```
+
+
+
+Checkpoint defaults are now tuned for long runs (`--save-steps 1000`, keep last 5).
+You can switch to `--save-strategy epoch` for smaller experiments.
+
+
+### Push checkpoints/model to Hugging Face Hub
+
+Yes, supported. Login first (or set `HF_TOKEN`) and enable Hub flags in training command:
+
+```bash
+uv run huggingface-cli login
+```
+
+```bash
+uv run python scripts/train_gpt2.py \
+  --dataset-dir data/mixture_train \
+  --dataset-split train \
+  --text-column text \
+  --tokenizer-dir artifacts/tokenizer \
+  --model-config configs/model/gpt2_500m.json \
+  --deepspeed configs/deepspeed/zero2_h100.json \
+  --push-to-hub \
+  --hub-model-id "your-username/khmer-gpt2-500m" \
+  --hub-strategy every_save \
+  --hub-private \
+  --output-dir artifacts/checkpoints
+```
+
+- `--hub-strategy end`: push only final artifacts.
+- `--hub-strategy every_save`: push at every checkpoint save.
+
+### Common DeepSpeed mismatch fix
+
+If you see errors like `Please correct the following DeepSpeed config values that mismatch TrainingArguments values`, this repo now avoids that by:
+- using DeepSpeed `"auto"` for optimizer/scheduler/batch settings, and
+- setting training args explicitly (`--adam-beta2 0.95`, `--weight-decay 0.1`, `--warmup-steps ...`) in `train_gpt2.py`.
+
+Also, `df: /root/.triton/autotune: No such file or directory` is typically a non-fatal environment warning in some Colab images.
+
+## 7) Inference (prompt completion)
+
+You can run simple language-model completion with a trained local checkpoint or Hub model:
+
+```bash
+uv run python scripts/infer_gpt2.py \
+  --model artifacts/checkpoints/final \
+  --prompt "សួស្តី ខ្ញុំចង់សួរអំពី" \
+  --max-new-tokens 128 \
+  --temperature 0.8 \
+  --top-p 0.95
+```
+
+For deterministic output:
+
+```bash
+uv run python scripts/infer_gpt2.py \
+  --model artifacts/checkpoints/final \
+  --prompt "Write a short Khmer and English greeting:" \
+  --no-sample
+```
+
+## 8) Suggested evaluation plan
+- Track train/validation perplexity separately for Khmer and English splits.
+- Use a fixed Khmer prompt suite (QA, summarization, translation).
+- Check script coverage and Unicode stability (Khmer normalization).
+- Run toxicity/safety checks before deployment.
+
+## 9) Practical notes for Colab + H100
+- Prefer bf16 (already enabled in DeepSpeed config).
+- Increase gradient accumulation if memory is tight.
+- Save checkpoint every 500-1000 steps.
+- Push intermediate checkpoints to cloud storage frequently.
+- Start with pilot run first (few hundred million to 2B tokens) before full run.
+
+## 10) Next steps
+- Add data deduplication and quality scoring.
+- Add packed-sequence training for throughput.
+- Add instruction tuning recipes (LoRA/full SFT).
+- Add Khmer-focused benchmark harness.

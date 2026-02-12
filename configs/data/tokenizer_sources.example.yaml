@@ -1,0 +1,16 @@
+# Recommended: tokenizer should use smaller but cleaner text than full pretraining data.
+# Run prepare_dataset with this config, then pass --dataset-dir to train_tokenizer.py.
+sources:
+  - name: khmer_tokenizer_hq
+    language: khmer
+    dataset: kimleang123/khmer-text-dataset
+    split: train
+    text_column: text
+    weight: 0.65
+
+  - name: english_tokenizer_hq
+    language: english
+    dataset: agentlans/high-quality-english-sentences
+    split: train
+    text_column: text
+    weight: 0.35
