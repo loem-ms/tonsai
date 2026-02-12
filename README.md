@@ -174,6 +174,33 @@ uv run python scripts/train_gpt2.py \
 Checkpoint defaults are now tuned for long runs (`--save-steps 1000`, keep last 5).
 You can switch to `--save-strategy epoch` for smaller experiments.
 
+
+### Push checkpoints/model to Hugging Face Hub
+
+Yes, supported. Login first (or set `HF_TOKEN`) and enable Hub flags in training command:
+
+```bash
+uv run huggingface-cli login
+```
+
+```bash
+uv run python scripts/train_gpt2.py \
+  --dataset-dir data/mixture_train \
+  --dataset-split train \
+  --text-column text \
+  --tokenizer-dir artifacts/tokenizer \
+  --model-config configs/model/gpt2_500m.json \
+  --deepspeed configs/deepspeed/zero2_h100.json \
+  --push-to-hub \
+  --hub-model-id "your-username/khmer-gpt2-500m" \
+  --hub-strategy every_save \
+  --hub-private \
+  --output-dir artifacts/checkpoints
+```
+
+- `--hub-strategy end`: push only final artifacts.
+- `--hub-strategy every_save`: push at every checkpoint save.
+
 ### Common DeepSpeed mismatch fix
 
 If you see errors like `Please correct the following DeepSpeed config values that mismatch TrainingArguments values`, this repo now avoids that by:

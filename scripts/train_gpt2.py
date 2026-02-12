@@ -32,7 +32,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--save-strategy", type=str, choices=["steps", "epoch"], default="steps")
     parser.add_argument("--save-steps", type=int, default=1000)
     parser.add_argument("--save-total-limit", type=int, default=5)
-    return parser.parse_args()
+    parser.add_argument("--push-to-hub", action="store_true", help="Upload model/checkpoints to Hugging Face Hub")
+    parser.add_argument("--hub-model-id", type=str, default=None, help="Hub repo id, e.g. username/khmer-gpt2-500m")
+    parser.add_argument("--hub-strategy", type=str, choices=["end", "every_save", "checkpoint", "all_checkpoints"], default="end")
+    parser.add_argument("--hub-private", action="store_true", help="Create/push to a private Hub repo")
+    args = parser.parse_args()
+
+    if args.push_to_hub and not args.hub_model_id:
+        parser.error("--hub-model-id is required when --push-to-hub is enabled.")
+    return args
 
 
 class OnTheFlyCausalCollator:
@@ -93,6 +101,10 @@ def main() -> None:
         deepspeed=str(args.deepspeed),
         report_to=["wandb"],
         remove_unused_columns=False,
+        push_to_hub=args.push_to_hub,
+        hub_model_id=args.hub_model_id,
+        hub_strategy=args.hub_strategy,
+        hub_private_repo=args.hub_private,
     )
 
     trainer = Trainer(
@@ -109,6 +121,10 @@ def main() -> None:
     trainer.train()
     trainer.save_model(str(args.output_dir / "final"))
     tokenizer.save_pretrained(str(args.output_dir / "final"))
+
+    if args.push_to_hub:
+        trainer.push_to_hub(commit_message="Upload final model after training")
+        tokenizer.push_to_hub(args.hub_model_id, private=args.hub_private)
 
 
 if __name__ == "__main__":
