@@ -1,0 +1,46 @@
+# Extensible corpus mix for continual pretraining.
+# You can add/remove items without touching Python code.
+sources:
+  # Khmer high-quality seed corpus
+  - name: khmer_hq_seed
+    language: khmer
+    dataset: kimleang123/khmer-text-dataset
+    split: train
+    text_column: text
+    weight: 0.35
+
+  # Khmer web-scale source (Common Crawl derived)
+  - name: khmer_mc4
+    language: khmer
+    dataset: allenai/c4
+    subset: km
+    split: train
+    text_column: text
+    weight: 0.15
+
+  # Khmer Wikipedia dump (if available in your chosen dataset namespace)
+  # Replace with a valid HF dataset id/subset that provides Khmer wiki text.
+  - name: khmer_wikipedia
+    language: khmer
+    dataset: wikimedia/wikipedia
+    subset: '20231101.km'
+    split: train
+    text_column: text
+    weight: 0.10
+
+  # English high-quality sentence corpus
+  - name: english_hq_seed
+    language: english
+    dataset: agentlans/high-quality-english-sentences
+    split: train
+    text_column: text
+    weight: 0.20
+
+  # English web-scale source
+  - name: english_c4
+    language: english
+    dataset: allenai/c4
+    subset: en
+    split: train
+    text_column: text
+    weight: 0.20

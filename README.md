@@ -53,7 +53,47 @@ For Colab terminal/Jupyter usage:
 
 ## 4) Data preparation
 
-### 4.1 Build mixed dataset
+### 4.1 Why multi-source corpus design (llm-jp style)
+
+Yes — your idea is correct. A multi-source design (Wikipedia + C4/mC4 + curated HQ corpora) is usually better than a single dataset because you get:
+- stronger coverage,
+- better factual diversity,
+- easier future extension.
+
+To support that, `scripts/prepare_dataset.py` now accepts a **YAML source config** with per-source weights and text column mapping.
+
+### 4.2 Build mixed dataset from YAML (recommended)
+
+Use the included extensible template:
+
+```bash
+uv run python scripts/prepare_dataset.py \
+  --config configs/data/train_sources.example.yaml \
+  --output-dir data/mixture_train
+```
+
+Template includes examples for:
+- Khmer HQ seed: `kimleang123/khmer-text-dataset`
+- Khmer web-scale: `allenai/c4` (`km` subset)
+- Khmer Wikipedia-style source placeholder
+- English HQ seed: `agentlans/high-quality-english-sentences`
+- English web-scale: `allenai/c4` (`en` subset)
+
+> Note: some dataset IDs/subsets may change or require replacement with current HF entries. The interface is designed so you only edit YAML.
+
+### 4.3 Build tokenizer-only dataset (smaller, cleaner)
+
+For tokenizer training, use less noisy but high-quality text first:
+
+```bash
+uv run python scripts/prepare_dataset.py \
+  --config configs/data/tokenizer_sources.example.yaml \
+  --output-dir data/mixture_tokenizer
+```
+
+### 4.4 Legacy CLI mode (still supported)
+
+You can still pass Khmer/English sources directly:
 
 ```bash
 uv run python scripts/prepare_dataset.py \
@@ -64,20 +104,20 @@ uv run python scripts/prepare_dataset.py \
   --output-dir data/mixture
 ```
 
-### 4.2 Train tokenizer
+## 5) Train tokenizer
 
-Use the mixed dataset directly (recommended, no extra `khmer.txt` / `english.txt` files needed):
+Use prepared dataset directly (recommended):
 
 ```bash
 uv run python scripts/train_tokenizer.py \
-  --dataset-dir data/mixture \
+  --dataset-dir data/mixture_tokenizer \
   --dataset-split train \
   --text-column text \
   --vocab-size 50000 \
   --output-dir artifacts/tokenizer
 ```
 
-If you already have raw text files, you can still train with:
+Or from raw text files:
 
 ```bash
 uv run python scripts/train_tokenizer.py \
@@ -86,12 +126,12 @@ uv run python scripts/train_tokenizer.py \
   --output-dir artifacts/tokenizer
 ```
 
-## 5) Pretraining / continual pretraining
+## 6) Pretraining / continual pretraining
 
 ### From scratch
 ```bash
 uv run python scripts/train_gpt2.py \
-  --dataset-dir data/mixture \
+  --dataset-dir data/mixture_train \
   --tokenizer-dir artifacts/tokenizer \
   --model-config configs/model/gpt2_500m.json \
   --deepspeed configs/deepspeed/zero2_h100.json \
@@ -101,7 +141,7 @@ uv run python scripts/train_gpt2.py \
 ### Continual pretraining from existing model
 ```bash
 uv run python scripts/train_gpt2.py \
-  --dataset-dir data/mixture \
+  --dataset-dir data/mixture_train \
   --tokenizer-dir artifacts/tokenizer \
   --model-config configs/model/gpt2_500m.json \
   --resume-from "existing_model_or_checkpoint" \
@@ -109,19 +149,20 @@ uv run python scripts/train_gpt2.py \
   --output-dir artifacts/checkpoints_cpt
 ```
 
-## 6) Suggested evaluation plan
+## 7) Suggested evaluation plan
 - Track train/validation perplexity separately for Khmer and English splits.
 - Use a fixed Khmer prompt suite (QA, summarization, translation).
 - Check script coverage and Unicode stability (Khmer normalization).
 - Run toxicity/safety checks before deployment.
 
-## 7) Practical notes for Colab + H100
+## 8) Practical notes for Colab + H100
 - Prefer bf16 (already enabled in DeepSpeed config).
 - Increase gradient accumulation if memory is tight.
 - Save checkpoint every 500-1000 steps.
 - Push intermediate checkpoints to cloud storage frequently.
+- Start with pilot run first (few hundred million to 2B tokens) before full run.
 
-## 8) Next steps
+## 9) Next steps
 - Add data deduplication and quality scoring.
 - Add packed-sequence training for throughput.
 - Add instruction tuning recipes (LoRA/full SFT).
