@@ -6,19 +6,14 @@ import json
 from pathlib import Path
 
 from datasets import load_from_disk
-from transformers import (
-    AutoTokenizer,
-    DataCollatorForLanguageModeling,
-    GPT2Config,
-    GPT2LMHeadModel,
-    Trainer,
-    TrainingArguments,
-)
+from transformers import AutoTokenizer, GPT2Config, GPT2LMHeadModel, Trainer, TrainingArguments
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train/continue pretraining GPT2 model")
     parser.add_argument("--dataset-dir", type=Path, required=True)
+    parser.add_argument("--dataset-split", type=str, default="train")
+    parser.add_argument("--text-column", type=str, default="text")
     parser.add_argument("--tokenizer-dir", type=Path, required=True)
     parser.add_argument("--model-config", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/checkpoints"))
@@ -35,19 +30,38 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+class OnTheFlyCausalCollator:
+    def __init__(self, tokenizer, text_column: str, max_length: int):
+        self.tokenizer = tokenizer
+        self.text_column = text_column
+        self.max_length = max_length
+
+    def __call__(self, features):
+        texts = [f.get(self.text_column, "") for f in features]
+        batch = self.tokenizer(
+            texts,
+            truncation=True,
+            max_length=self.max_length,
+            padding=True,
+            return_tensors="pt",
+        )
+        labels = batch["input_ids"].clone()
+        if "attention_mask" in batch:
+            labels[batch["attention_mask"] == 0] = -100
+        batch["labels"] = labels
+        return batch
+
+
 def main() -> None:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_dir)
     tokenizer.model_max_length = args.max_length
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
 
-    dataset = load_from_disk(str(args.dataset_dir))["train"]
-
-    def tokenize(batch):
-        return tokenizer(batch["text"], truncation=True, max_length=args.max_length)
-
-    tokenized = dataset.map(tokenize, batched=True, remove_columns=dataset.column_names)
+    dataset = load_from_disk(str(args.dataset_dir))[args.dataset_split]
 
     if args.resume_from:
         model = GPT2LMHeadModel.from_pretrained(args.resume_from)
@@ -75,8 +89,12 @@ def main() -> None:
     trainer = Trainer(
         model=model,
         args=train_args,
-        train_dataset=tokenized,
-        data_collator=DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False),
+        train_dataset=dataset,
+        data_collator=OnTheFlyCausalCollator(
+            tokenizer=tokenizer,
+            text_column=args.text_column,
+            max_length=args.max_length,
+        ),
     )
 
     trainer.train()

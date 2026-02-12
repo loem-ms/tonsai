@@ -131,10 +131,14 @@ uv run python scripts/train_tokenizer.py \
 
 ## 6) Pretraining / continual pretraining
 
+`train_gpt2.py` now tokenizes **on-the-fly in the data collator** (instead of a full upfront `dataset.map(...)`), so startup is much faster on large corpora.
+
 ### From scratch
 ```bash
 uv run python scripts/train_gpt2.py \
   --dataset-dir data/mixture_train \
+  --dataset-split train \
+  --text-column text \
   --tokenizer-dir artifacts/tokenizer \
   --model-config configs/model/gpt2_500m.json \
   --deepspeed configs/deepspeed/zero2_h100.json \
@@ -145,6 +149,8 @@ uv run python scripts/train_gpt2.py \
 ```bash
 uv run python scripts/train_gpt2.py \
   --dataset-dir data/mixture_train \
+  --dataset-split train \
+  --text-column text \
   --tokenizer-dir artifacts/tokenizer \
   --model-config configs/model/gpt2_500m.json \
   --resume-from "existing_model_or_checkpoint" \
