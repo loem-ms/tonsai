@@ -69,7 +69,7 @@ uv run python scripts/train_tokenizer.py \
 
 ## 4) Model training
 
-### From scratch
+### 4.1 GPT-2 from scratch
 
 ```bash
 uv run python scripts/train_gpt2.py \
@@ -86,7 +86,7 @@ uv run python scripts/train_gpt2.py \
   --output-dir artifacts/checkpoints
 ```
 
-### Continual pretraining
+### 4.2 GPT-2 continual pretraining
 
 ```bash
 uv run python scripts/train_gpt2.py \
@@ -103,6 +103,26 @@ uv run python scripts/train_gpt2.py \
   --save-total-limit 5 \
   --output-dir artifacts/checkpoints_cpt
 ```
+
+### 4.3 Gemma 3 1B continual pretraining (Khmer specialization)
+
+```bash
+uv run python scripts/train_gemma3_cpt.py \
+  --model google/gemma-3-1b-it \
+  --dataset-dir data/mixture_train \
+  --dataset-split train \
+  --text-column text \
+  --deepspeed configs/deepspeed/zero2_h100.json \
+  --gradient-checkpointing \
+  --attn-implementation sdpa \
+  --warmup-steps 200 \
+  --save-strategy steps \
+  --save-steps 1000 \
+  --save-total-limit 5 \
+  --output-dir artifacts/gemma3-cpt
+```
+
+Training profile template: `configs/train/gemma3_1b_cpt.yaml`
 
 ## 5) Optional: Upload checkpoints/model to Hugging Face Hub
 
@@ -127,6 +147,8 @@ uv run python scripts/train_gpt2.py \
 
 ## 6) Inference (prompt completion)
 
+### 6.1 GPT-2 completion
+
 ```bash
 uv run python scripts/infer_gpt2.py \
   --model artifacts/checkpoints/final \
@@ -136,11 +158,23 @@ uv run python scripts/infer_gpt2.py \
   --top-p 0.95
 ```
 
+### 6.2 Gemma 3 completion
+
+```bash
+uv run python scripts/infer_gemma3.py \
+  --model artifacts/gemma3-cpt/final \
+  --prompt "សូមបន្តប្រយោគនេះ៖ ភាសាខ្មែរគឺ" \
+  --max-new-tokens 192 \
+  --temperature 0.7 \
+  --top-p 0.9 \
+  --use-chat-template
+```
+
 Deterministic generation:
 
 ```bash
-uv run python scripts/infer_gpt2.py \
-  --model artifacts/checkpoints/final \
+uv run python scripts/infer_gemma3.py \
+  --model artifacts/gemma3-cpt/final \
   --prompt "Write a short Khmer and English greeting:" \
   --no-sample
 ```
@@ -148,7 +182,9 @@ uv run python scripts/infer_gpt2.py \
 ## 7) Key configs
 - Model: `configs/model/gpt2_500m.json`
 - DeepSpeed: `configs/deepspeed/zero2_h100.json`
-- Training profile: `configs/train/cpt_500m.yaml`
+- Training profiles:
+  - `configs/train/cpt_500m.yaml`
+  - `configs/train/gemma3_1b_cpt.yaml`
 - Data source templates:
   - `configs/data/train_sources.example.yaml`
   - `configs/data/tokenizer_sources.example.yaml`
