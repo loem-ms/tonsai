@@ -113,9 +113,12 @@ uv run python scripts/train_tokenizer.py \
   --dataset-dir data/mixture_tokenizer \
   --dataset-split train \
   --text-column text \
+  --max-examples 1000000 \
   --vocab-size 50000 \
   --output-dir artifacts/tokenizer
 ```
+
+`--max-examples` is optional, but useful to speed up tokenizer iteration on very large corpora.
 
 Or from raw text files:
 

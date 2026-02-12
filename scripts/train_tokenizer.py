@@ -20,6 +20,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--dataset-split", type=str, default="train")
     parser.add_argument("--text-column", type=str, default="text")
+    parser.add_argument(
+        "--max-examples",
+        type=int,
+        default=None,
+        help="Optional cap on number of examples used for tokenizer training (useful for faster iteration)",
+    )
     parser.add_argument("--vocab-size", type=int, default=50000)
     parser.add_argument("--min-frequency", type=int, default=2)
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/tokenizer"))
@@ -27,11 +33,16 @@ def parse_args() -> argparse.Namespace:
 
     if not args.input and not args.dataset_dir:
         parser.error("Provide either --input files or --dataset-dir.")
+    if args.max_examples is not None and args.max_examples <= 0:
+        parser.error("--max-examples must be > 0 when provided.")
     return args
 
 
-def _iter_dataset_text(dataset_dir: Path, split: str, text_column: str):
+def _iter_dataset_text(dataset_dir: Path, split: str, text_column: str, max_examples: int | None = None):
     dataset = load_from_disk(str(dataset_dir))[split]
+    if max_examples is not None:
+        dataset = dataset.select(range(min(max_examples, len(dataset))))
+
     for row in dataset:
         text = row.get(text_column)
         if text:
@@ -57,7 +68,12 @@ def main() -> None:
     )
 
     if args.dataset_dir:
-        iterator = _iter_dataset_text(args.dataset_dir, args.dataset_split, args.text_column)
+        iterator = _iter_dataset_text(
+            dataset_dir=args.dataset_dir,
+            split=args.dataset_split,
+            text_column=args.text_column,
+            max_examples=args.max_examples,
+        )
         tokenizer.train_from_iterator(iterator=iterator, trainer=trainer)
     else:
         tokenizer.train(files=args.input, trainer=trainer)
