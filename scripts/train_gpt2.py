@@ -23,7 +23,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--per-device-batch-size", type=int, default=2)
     parser.add_argument("--gradient-accumulation", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
-    parser.add_argument("--warmup-ratio", type=float, default=0.03)
+    parser.add_argument("--adam-beta1", type=float, default=0.9)
+    parser.add_argument("--adam-beta2", type=float, default=0.95)
+    parser.add_argument("--weight-decay", type=float, default=0.1)
+    parser.add_argument("--warmup-steps", type=int, default=200)
     parser.add_argument("--num-train-epochs", type=float, default=1.0)
     parser.add_argument("--logging-steps", type=int, default=10)
     parser.add_argument("--save-steps", type=int, default=500)
@@ -75,7 +78,10 @@ def main() -> None:
         per_device_train_batch_size=args.per_device_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation,
         learning_rate=args.learning_rate,
-        warmup_ratio=args.warmup_ratio,
+        adam_beta1=args.adam_beta1,
+        adam_beta2=args.adam_beta2,
+        weight_decay=args.weight_decay,
+        warmup_steps=args.warmup_steps,
         num_train_epochs=args.num_train_epochs,
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,

@@ -142,6 +142,7 @@ uv run python scripts/train_gpt2.py \
   --tokenizer-dir artifacts/tokenizer \
   --model-config configs/model/gpt2_500m.json \
   --deepspeed configs/deepspeed/zero2_h100.json \
+  --warmup-steps 200 \
   --output-dir artifacts/checkpoints
 ```
 
@@ -155,8 +156,18 @@ uv run python scripts/train_gpt2.py \
   --model-config configs/model/gpt2_500m.json \
   --resume-from "existing_model_or_checkpoint" \
   --deepspeed configs/deepspeed/zero2_h100.json \
+  --warmup-steps 200 \
   --output-dir artifacts/checkpoints_cpt
 ```
+
+
+### Common DeepSpeed mismatch fix
+
+If you see errors like `Please correct the following DeepSpeed config values that mismatch TrainingArguments values`, this repo now avoids that by:
+- using DeepSpeed `"auto"` for optimizer/scheduler/batch settings, and
+- setting training args explicitly (`--adam-beta2 0.95`, `--weight-decay 0.1`, `--warmup-steps ...`) in `train_gpt2.py`.
+
+Also, `df: /root/.triton/autotune: No such file or directory` is typically a non-fatal environment warning in some Colab images.
 
 ## 7) Suggested evaluation plan
 - Track train/validation perplexity separately for Khmer and English splits.
