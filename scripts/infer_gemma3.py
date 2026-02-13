@@ -17,12 +17,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", type=str, choices=["auto", "cuda", "cpu"], default="auto")
     parser.add_argument("--no-sample", action="store_true")
     parser.add_argument("--use-chat-template", action="store_true", help="Apply chat template with user role")
-    parser.add_argument(
-        "--chat-template-model",
-        type=str,
-        default="google/gemma-3-1b-it",
-        help="Tokenizer source to borrow chat template from when model tokenizer has none",
-    )
     return parser.parse_args()
 
 
@@ -32,28 +26,6 @@ def resolve_device(device_arg: str) -> torch.device:
     if device_arg == "cpu":
         return torch.device("cpu")
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def _build_prompt(tokenizer, prompt_text: str, use_chat_template: bool, chat_template_model: str) -> str:
-    if not use_chat_template:
-        return prompt_text
-
-    if getattr(tokenizer, "chat_template", None) is None:
-        template_tokenizer = AutoTokenizer.from_pretrained(chat_template_model)
-        tokenizer.chat_template = getattr(template_tokenizer, "chat_template", None)
-
-    if getattr(tokenizer, "chat_template", None) is None:
-        print(
-            "[warn] No chat template found on tokenizer and fallback template could not be loaded; using raw prompt.",
-            flush=True,
-        )
-        return prompt_text
-
-    return tokenizer.apply_chat_template(
-        [{"role": "user", "content": prompt_text}],
-        tokenize=False,
-        add_generation_prompt=True,
-    )
 
 
 def main() -> None:
@@ -70,12 +42,14 @@ def main() -> None:
     model.to(device)
     model.eval()
 
-    prompt = _build_prompt(
-        tokenizer=tokenizer,
-        prompt_text=args.prompt,
-        use_chat_template=args.use_chat_template,
-        chat_template_model=args.chat_template_model,
-    )
+    if args.use_chat_template and hasattr(tokenizer, "apply_chat_template"):
+        prompt = tokenizer.apply_chat_template(
+            [{"role": "user", "content": args.prompt}],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+    else:
+        prompt = args.prompt
 
     inputs = tokenizer(prompt, return_tensors="pt")
     inputs = {k: v.to(device) for k, v in inputs.items()}
