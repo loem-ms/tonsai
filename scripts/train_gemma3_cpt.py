@@ -1,7 +1,9 @@
 import argparse
+import json
 from pathlib import Path
 
 from datasets import load_from_disk
+from huggingface_hub import HfApi
 from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
 
 
@@ -61,6 +63,29 @@ class OnTheFlyCausalCollator:
         return batch
 
 
+def _save_final_artifacts(final_dir: Path, trainer: Trainer, tokenizer, args: argparse.Namespace) -> None:
+    final_dir.mkdir(parents=True, exist_ok=True)
+    trainer.save_model(str(final_dir))
+    tokenizer.save_pretrained(str(final_dir))
+
+    if hasattr(trainer.model, "generation_config") and trainer.model.generation_config is not None:
+        trainer.model.generation_config.save_pretrained(str(final_dir))
+
+    (final_dir / "run_args.json").write_text(json.dumps(vars(args), indent=2, default=str))
+    (final_dir / "training_args.json").write_text(json.dumps(trainer.args.to_dict(), indent=2, default=str))
+
+
+def _upload_final_bundle(final_dir: Path, repo_id: str, private: bool) -> None:
+    api = HfApi()
+    api.create_repo(repo_id=repo_id, private=private, exist_ok=True)
+    api.upload_folder(
+        folder_path=str(final_dir),
+        repo_id=repo_id,
+        repo_type="model",
+        commit_message="Upload final model + tokenizer + configs bundle",
+    )
+
+
 def main() -> None:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -116,12 +141,13 @@ def main() -> None:
     )
 
     trainer.train()
-    trainer.save_model(str(args.output_dir / "final"))
-    tokenizer.save_pretrained(str(args.output_dir / "final"))
+
+    final_dir = args.output_dir / "final"
+    _save_final_artifacts(final_dir=final_dir, trainer=trainer, tokenizer=tokenizer, args=args)
 
     if args.push_to_hub:
         trainer.push_to_hub(commit_message="Upload final Gemma3 CPT model")
-        tokenizer.push_to_hub(args.hub_model_id, private=args.hub_private)
+        _upload_final_bundle(final_dir=final_dir, repo_id=args.hub_model_id, private=args.hub_private)
 
 
 if __name__ == "__main__":

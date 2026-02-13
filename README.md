@@ -154,6 +154,9 @@ uv run python scripts/train_gpt2.py \
 
 ### 5.2 Gemma 3 upload
 
+When using `scripts/train_gemma3_cpt.py`, the final bundle now includes model weights, tokenizer files, generation config, `run_args.json`, and `training_args.json` under `artifacts/gemma3-cpt/final`, and this full folder is uploaded to Hub.
+
+
 ```bash
 uv run python scripts/train_gemma3_cpt.py \
   --model google/gemma-3-1b-it \
