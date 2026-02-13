@@ -71,7 +71,6 @@ uv run python scripts/train_tokenizer.py \
 
 ### 4.1 GPT-2 from scratch
 
-
 ```bash
 uv run python scripts/train_gpt2.py \
   --dataset-dir data/mixture_train \
@@ -174,8 +173,6 @@ uv run python scripts/train_gemma3_cpt.py \
 
 ### 6.1 GPT-2 completion
 
-## 6) Inference (prompt completion)
-
 ```bash
 uv run python scripts/infer_gpt2.py \
   --model artifacts/checkpoints/final \
@@ -194,19 +191,17 @@ uv run python scripts/infer_gemma3.py \
   --max-new-tokens 192 \
   --temperature 0.7 \
   --top-p 0.9 \
-  --use-chat-template
+  --use-chat-template \
+  --chat-template-model google/gemma-3-1b-it
 ```
+
+If your CPT tokenizer does not include `chat_template`, the script automatically borrows it from `--chat-template-model`; if fallback loading fails, it falls back to raw prompt generation with a warning.
 
 Deterministic generation:
 
 ```bash
 uv run python scripts/infer_gemma3.py \
   --model artifacts/gemma3-cpt/final \
-Deterministic generation:
-
-```bash
-uv run python scripts/infer_gpt2.py \
-  --model artifacts/checkpoints/final \
   --prompt "Write a short Khmer and English greeting:" \
   --no-sample
 ```
@@ -217,7 +212,6 @@ uv run python scripts/infer_gpt2.py \
 - Training profiles:
   - `configs/train/cpt_500m.yaml`
   - `configs/train/gemma3_1b_cpt.yaml`
-- Training profile: `configs/train/cpt_500m.yaml`
 - Data source templates:
   - `configs/data/train_sources.example.yaml`
   - `configs/data/tokenizer_sources.example.yaml`
