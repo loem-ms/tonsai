@@ -188,6 +188,7 @@ uv run python scripts/infer_gpt2.py \
 uv run python scripts/infer_gemma3.py \
   --model artifacts/gemma3-cpt/final \
   --prompt "សូមបន្តប្រយោគនេះ៖ ភាសាខ្មែរគឺ" \
+  --min-new-tokens 16 \
   --max-new-tokens 192 \
   --temperature 0.7 \
   --top-p 0.9 \
@@ -196,6 +197,8 @@ uv run python scripts/infer_gemma3.py \
 ```
 
 If your CPT tokenizer does not include `chat_template`, the script automatically borrows it from `--chat-template-model`; if fallback loading fails, it falls back to raw prompt generation with a warning.
+
+If you see an empty completion, increase `--min-new-tokens` (for example `16` or `32`) and prefer `--use-chat-template` for instruction-tuned Gemma checkpoints.
 
 Deterministic generation:
 

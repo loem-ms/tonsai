@@ -9,6 +9,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", type=str, required=True, help="Local path or HF model id")
     parser.add_argument("--prompt", type=str, required=True)
     parser.add_argument("--max-new-tokens", type=int, default=256)
+    parser.add_argument("--min-new-tokens", type=int, default=1)
     parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--top-p", type=float, default=0.9)
     parser.add_argument("--top-k", type=int, default=50)
@@ -85,11 +86,13 @@ def main() -> None:
     )
 
     inputs = tokenizer(prompt, return_tensors="pt")
+    input_len = inputs["input_ids"].shape[-1]
     inputs = {k: v.to(device) for k, v in inputs.items()}
 
     do_sample = not args.no_sample
     generation_kwargs = {
         "max_new_tokens": args.max_new_tokens,
+        "min_new_tokens": args.min_new_tokens,
         "do_sample": do_sample,
         "num_return_sequences": args.num_return_sequences,
         "pad_token_id": tokenizer.pad_token_id,
@@ -110,10 +113,17 @@ def main() -> None:
             **generation_kwargs,
         )
 
-    decoded = tokenizer.batch_decode(outputs, skip_special_tokens=True)
-    for i, text in enumerate(decoded, start=1):
+    full_texts = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+    new_token_ids = outputs[:, input_len:]
+    new_texts = tokenizer.batch_decode(new_token_ids, skip_special_tokens=True)
+
+    for i, (new_text, full_text) in enumerate(zip(new_texts, full_texts), start=1):
         print(f"\n=== Completion {i} ===")
-        print(text)
+        if new_text.strip():
+            print(new_text)
+        else:
+            print("[warn] Model returned empty new text. Showing full decoded sequence instead:")
+            print(full_text)
 
 
 if __name__ == "__main__":
