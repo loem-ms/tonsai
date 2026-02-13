@@ -16,6 +16,8 @@ sources:
     subset: km
     split: train
     text_column: text
+    streaming: true
+    max_samples: 300000
     weight: 0.15
 
   # Khmer Wikipedia dump (if available in your chosen dataset namespace)
@@ -26,6 +28,7 @@ sources:
     subset: '20231101.km'
     split: train
     text_column: text
+    max_samples: 200000
     weight: 0.10
 
   # English high-quality sentence corpus
@@ -36,11 +39,22 @@ sources:
     text_column: text
     weight: 0.20
 
-  # English web-scale source
-  - name: english_c4
+  # English web-scale source (sampled with streaming to avoid full C4 download)
+  - name: english_c4_sampled
     language: english
     dataset: allenai/c4
     subset: en
     split: train
     text_column: text
+    streaming: true
+    max_samples: 500000
     weight: 0.20
+
+  # Alternative smaller English option (recommended on constrained environments):
+  # - name: english_fineweb_edu_small
+  #   language: english
+  #   dataset: HuggingFaceFW/fineweb-edu
+  #   split: train
+  #   text_column: text
+  #   max_samples: 500000
+  #   weight: 0.20

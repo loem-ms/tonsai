@@ -19,6 +19,25 @@ uv sync
 
 ### 2.1 Build training mixture (YAML-driven)
 
+
+If a source is too large (for example English C4), use YAML fields `streaming: true` with `max_samples` so only a bounded subset is read without downloading the full dataset.
+
+Example source block:
+
+```yaml
+- name: english_c4_sampled
+  language: english
+  dataset: allenai/c4
+  subset: en
+  split: train
+  text_column: text
+  streaming: true
+  max_samples: 500000
+  weight: 0.20
+```
+
+This behavior is already included in `configs/data/train_sources.example.yaml`.
+
 ```bash
 uv run python scripts/prepare_dataset.py \
   --config configs/data/train_sources.example.yaml \

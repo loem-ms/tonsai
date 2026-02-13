@@ -31,10 +31,51 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def _truncate_dataset(ds: Dataset, max_samples: int | None) -> Dataset:
+    if max_samples is None:
+        return ds
+    return ds.select(range(min(max_samples, len(ds))))
+
+
+def _load_streaming_text_dataset(source: SourceConfig, source_lang: str, source_name: str) -> Dataset:
+    dataset_name = source["dataset"]
+    subset = source.get("subset")
+    split = source.get("split", "train")
+    text_column = source.get("text_column", "text")
+    max_samples = source.get("max_samples")
+
+    if max_samples is None:
+        raise ValueError(f"streaming=true requires max_samples for source {source_lang}:{source_name}")
+
+    _log(f"Streaming source: {source_lang}:{source_name} (max_samples={max_samples})")
+    if subset is not None:
+        stream = load_dataset(dataset_name, subset, split=split, streaming=True)
+    else:
+        stream = load_dataset(dataset_name, split=split, streaming=True)
+
+    rows = []
+    for row in stream:
+        text = row.get(text_column)
+        if text:
+            rows.append({"text": text})
+        if len(rows) >= int(max_samples):
+            break
+
+    ds = Dataset.from_list(rows)
+    _log(f"Loaded rows for {source_lang}:{source_name}: {len(ds)} (streaming)")
+    return ds
+
+
 def _load_dataset_source(source: SourceConfig) -> Dataset:
     source_name = source.get("name") or source.get("dataset") or source.get("local_text")
     source_lang = source.get("language", "unknown")
     _log(f"Loading source: {source_lang}:{source_name}")
+
+    max_samples = source.get("max_samples")
+    streaming = bool(source.get("streaming", False))
+
+    if streaming:
+        return _load_streaming_text_dataset(source, source_lang=source_lang, source_name=source_name)
 
     if "local_text" in source:
         loaded = load_dataset("text", data_files={"train": source["local_text"]})["train"]
@@ -52,6 +93,7 @@ def _load_dataset_source(source: SourceConfig) -> Dataset:
         loaded = loaded.rename_column(text_column, "text")
 
     loaded = loaded.select_columns(["text"])
+    loaded = _truncate_dataset(loaded, max_samples=max_samples)
     _log(f"Loaded rows for {source_lang}:{source_name}: {len(loaded)}")
     return loaded
 
