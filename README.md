@@ -187,6 +187,7 @@ uv run python scripts/infer_gpt2.py \
 ```bash
 uv run python scripts/infer_gemma3.py \
   --model artifacts/gemma3-cpt/final \
+  --tokenizer google/gemma-3-1b-it \
   --prompt "សូមបន្តប្រយោគនេះ៖ ភាសាខ្មែរគឺ" \
   --min-new-tokens 16 \
   --max-new-tokens 192 \
@@ -199,6 +200,14 @@ uv run python scripts/infer_gemma3.py \
 If your CPT tokenizer does not include `chat_template`, the script automatically borrows it from `--chat-template-model`; if fallback loading fails, it falls back to raw prompt generation with a warning.
 
 If you see an empty completion, increase `--min-new-tokens` (for example `16` or `32`) and prefer `--use-chat-template` for instruction-tuned Gemma checkpoints.
+
+The warning about tied weights (`will NOT tie them`) is usually non-fatal and often appears with some saved checkpoints; it does not by itself mean inference is broken.
+
+If your CPT model gives empty output while base Gemma works, try:
+- `--tokenizer google/gemma-3-1b-it` (tokenizer override),
+- `--use-chat-template --chat-template-model google/gemma-3-1b-it`,
+- higher `--min-new-tokens` (for example `16` or `32`),
+- `--print-token-ids` to inspect generated token IDs.
 
 Deterministic generation:
 

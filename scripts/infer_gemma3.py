@@ -7,6 +7,12 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Gemma 3 text generation inference")
     parser.add_argument("--model", type=str, required=True, help="Local path or HF model id")
+    parser.add_argument(
+        "--tokenizer",
+        type=str,
+        default=None,
+        help="Optional tokenizer path/id override (useful if CPT repo tokenizer is broken/missing metadata)",
+    )
     parser.add_argument("--prompt", type=str, required=True)
     parser.add_argument("--max-new-tokens", type=int, default=256)
     parser.add_argument("--min-new-tokens", type=int, default=1)
@@ -24,6 +30,7 @@ def parse_args() -> argparse.Namespace:
         default="google/gemma-3-1b-it",
         help="Tokenizer source to borrow chat template from when model tokenizer has none",
     )
+    parser.add_argument("--print-token-ids", action="store_true", help="Print generated token ids for debugging")
     return parser.parse_args()
 
 
@@ -70,7 +77,8 @@ def main() -> None:
 
     device = resolve_device(args.device)
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    tokenizer_source = args.tokenizer or args.model
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_source)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -117,13 +125,17 @@ def main() -> None:
     new_token_ids = outputs[:, input_len:]
     new_texts = tokenizer.batch_decode(new_token_ids, skip_special_tokens=True)
 
-    for i, (new_text, full_text) in enumerate(zip(new_texts, full_texts), start=1):
+    for i, (new_text, full_text, token_ids) in enumerate(zip(new_texts, full_texts, new_token_ids), start=1):
         print(f"\n=== Completion {i} ===")
         if new_text.strip():
             print(new_text)
         else:
-            print("[warn] Model returned empty new text. Showing full decoded sequence instead:")
+            print("[warn] Model returned empty new text. Showing full decoded sequence and raw token ids:")
             print(full_text)
+            print(token_ids.tolist())
+
+        if args.print_token_ids:
+            print("[debug] generated_token_ids:", token_ids.tolist())
 
 
 if __name__ == "__main__":
